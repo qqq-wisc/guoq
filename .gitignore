@@ -4,5 +4,6 @@ target
 
 __pycache__
 .idea
+venv
 .vscode
 *.iml

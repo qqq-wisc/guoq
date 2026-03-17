@@ -14,7 +14,7 @@ To reproduce the experimental conditions of the paper, see the [Zenodo artifact]
 - Java 21
 - Maven 3
 - Python >= 3.8 and dependencies in `requirements.txt`
-  - `pip install requirements.txt`
+  - `pip install -r requirements.txt`
 - gcc and make (for [Synthetiq](https://github.com/eth-sri/synthetiq))
 
 ## Installation

@@ -50,6 +50,71 @@ public class CircuitDAG {
         this.qasmHeader = circuit.getQasmHeader();
         this.qubits = new HashSet<>(circuit.getQubits());
         this.qubitRenameMap = HashBiMap.create(circuit.getQubitRenameMap());
+        this.assignDepthToNodes();
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== CircuitDAG ===\n");
+
+        // Header
+        if (qasmHeader != null && !qasmHeader.isEmpty()) {
+            sb.append("Header: ").append(qasmHeader).append("\n");
+        }
+
+        // Basic stats
+        sb.append("Qubits: ").append(qubits != null ? qubits : "none").append("\n");
+        sb.append("Total nodes: ").append(dag != null ? dag.vertexSet().size() : 0).append("\n");
+        sb.append("Total edges: ").append(dag != null ? dag.edgeSet().size() : 0).append("\n\n");
+
+        // Qubit rename map
+        if (qubitRenameMap != null && !qubitRenameMap.isEmpty()) {
+            sb.append("Qubit Rename Map:\n");
+            for (Map.Entry<String, String> e : qubitRenameMap.entrySet()) {
+                sb.append("  ").append(e.getKey()).append(" -> ").append(e.getValue()).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // Nodes
+        sb.append("Nodes:\n");
+        if (dag != null) {
+            for (Node n : dag.vertexSet()) {
+                sb.append("  Node ").append(n.getId());
+                if (n.isGate()) {
+                    sb.append(" (Gate: ").append(n.getId());
+                    if (n.getQubits() != null && !n.getQubits().isEmpty()) {
+                        sb.append(", Qubits: ").append(n.getQubits());
+                    }
+                    sb.append(")");
+                }
+                if (n.getDepth() >= 0) {
+                    sb.append(" [Depth: ").append(n.getDepth()).append("]");
+                }
+                sb.append("\n");
+            }
+        } else {
+            sb.append("  (no nodes)\n");
+        }
+
+        // Edges
+        sb.append("\nEdges:\n");
+        if (dag != null) {
+            for (Edge e : dag.edgeSet()) {
+                Node src = dag.getEdgeSource(e);
+                Node tgt = dag.getEdgeTarget(e);
+                sb.append("  ").append(src.getId()).append(" -> ").append(tgt.getId());
+                if (e.getQubit() != null) {
+                    sb.append(" [q=").append(e.getQubit()).append("]");
+                }
+                sb.append("\n");
+            }
+        } else {
+            sb.append("  (no edges)\n");
+        }
+
+        return sb.toString();
     }
 
     public String toQASM() {
@@ -63,6 +128,64 @@ public class CircuitDAG {
         });
 
         return qasm.toString();
+    }
+
+    // Assigns a depth value to all nodes, in topo-sort time O(V + E)
+    public void assignDepthToNodes() {
+        Map<Node, Integer> depthMap = new HashMap<>();
+        TopologicalOrderIterator<Node, Edge> iter = new TopologicalOrderIterator<>(dag);
+
+        while (iter.hasNext()) {
+            Node node = iter.next();
+
+            // Source qubits are depth 0
+            if (node.isSourceQubit()) {
+                depthMap.put(node, 0);
+                node.setDepth(0);
+                continue;
+            }
+
+            int maxPredDepth = 0;
+            for (Node pred : Graphs.predecessorListOf(dag, node)) {
+                int predDepth = depthMap.getOrDefault(pred, 0);
+
+                if (pred.isSourceQubit()) {
+                    predDepth = 0; // don't count sources
+                } else if (pred.isSinkQubit()) {
+                    continue; // skip sinks
+                }
+
+                maxPredDepth = Math.max(maxPredDepth, predDepth);
+            }
+
+            int nodeDepth = maxPredDepth + 1;
+            depthMap.put(node, nodeDepth);
+            node.setDepth(nodeDepth);
+        }
+
+        // set sink qubits' depth = max of their preds
+        for (Node n : dag.vertexSet()) {
+            if (n.isSinkQubit()) {
+                int maxPredDepth = 0;
+                for (Node pred : Graphs.predecessorListOf(dag, n)) {
+                    maxPredDepth = Math.max(maxPredDepth, depthMap.getOrDefault(pred, 0));
+                }
+                n.setDepth(maxPredDepth);
+            }
+        }
+    }
+
+    // This function gets the overall depth of the circuit by returning the depth associated with
+    // the last non-sink node
+    // SAFETY: We assume that assignDepthToNodes has been called after any changes to the CircuitDAG
+    public int getDepth() {
+        int maxDepth = 0;
+
+        for (Node node : dag.vertexSet()) {
+            maxDepth = Math.max(maxDepth, node.getDepth());
+        }
+
+        return maxDepth;
     }
 
     public boolean contains(Node gate) {

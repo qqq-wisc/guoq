@@ -1,0 +1,3 @@
+asb@pc ~/r/guoq (internal-parallelism ✚2…2) > timeout 900 java -cp target/GUOQ-1.0-jar-with-dependencies.jar qoptimizer.Optimizer -g IBMO -opt TOTAL -search BEAM_MCMC -temp 0 -q 8000 -resynth NONE benchmarks/parallel/qft_N100_basis_rz_rx_ry_cx.qasm --verbosity 1
+{"original_t":"297","original_total":"19790","original_2q":"10050"}
+{"time_to_best":"4","rules_applied_to_best":"{}","best_size_2q":"6510","best_circuit_size":"16250","best_size_t":"297","seconds_elapsed":"4.427","all_rules_applied":"{}"}

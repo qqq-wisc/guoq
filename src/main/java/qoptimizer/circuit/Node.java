@@ -30,6 +30,9 @@ public class Node {
     @Getter
     private List<Expr> angles;
     @Getter
+    @Setter
+    private Integer depth;
+    @Getter
     private List<String> qregNames;
 
     public Node(String id, Type type, List<String> qubits, List<Expr> angles) {
@@ -37,6 +40,8 @@ public class Node {
         this.type = type;
         this.qubits = qubits;
         this.angles = angles;
+        // instantiated in the CircuitDAG constructor
+        this.depth = 0;
     }
 
     public Node(String id, Type type, List<String> qubits, List<Expr> angles, List<String> qregNames) {
@@ -45,6 +50,8 @@ public class Node {
         this.qubits = qubits;
         this.angles = angles;
         this.qregNames = qregNames;
+        // instantiated in the CircuitDAG constructor
+        this.depth = 0;
     }
 
     public boolean isGate() {
