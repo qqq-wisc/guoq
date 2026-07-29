@@ -36,6 +36,7 @@ import argparse
 import gzip
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -233,6 +234,17 @@ def rescore_with_qmr(opt_circuit, guoq_flags, per_trial_timeout, out_dir, job):
     return info
 
 
+def has_t_or_cx(circuit_path):
+    """True if the QASM circuit applies any t, tdg, or cx gate — the only gates
+    the routing pass charges for. A circuit without them routes at cost 0, so
+    mapping and routing can be skipped entirely."""
+    with open(circuit_path) as f:
+        for line in f:
+            if re.match(r"\s*(t|tdg|cx)[\s(]", line):
+                return True
+    return False
+
+
 def gzip_in_place(path, level=9):
     """gzip `path` -> `path`.gz (level 9 == gzip -9) and remove the original."""
     gz_path = path + ".gz"
@@ -334,10 +346,16 @@ def run(args, guoq_flags):
     # config selected on the command line (the same one GUOQ optimizes against),
     # and record the average cost. In --skip-guoq mode this scores the input
     # circuit; otherwise it re-scores GUOQ's optimized output.
-    rescore = rescore_with_qmr(circuit_to_route, guoq_flags, args.rescore_timeout,
-                               out_dir, job)
-    print(f"qmr rescore ({rescore.get('backend')}) "
-          f"avg_cost={rescore.get('avg_cost')}", flush=True)
+    if os.path.exists(circuit_to_route) and not has_t_or_cx(circuit_to_route):
+        # No t/tdg/cx gates left: routing would charge nothing, so skip the
+        # solver entirely and record an average cost of 0.
+        rescore = {"skipped": "no t or cx gates in circuit", "avg_cost": 0.0}
+        print("qmr rescore skipped: no t or cx gates, avg_cost=0.0", flush=True)
+    else:
+        rescore = rescore_with_qmr(circuit_to_route, guoq_flags,
+                                   args.rescore_timeout, out_dir, job)
+        print(f"qmr rescore ({rescore.get('backend')}) "
+              f"avg_cost={rescore.get('avg_cost')}", flush=True)
 
     result = dict(vars(args))
     result.pop("circuit_file", None)

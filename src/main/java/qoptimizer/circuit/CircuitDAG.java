@@ -301,7 +301,13 @@ public class CircuitDAG {
      */
     public int routedDepth() {
         if (this.routedDepth == null) {
-            this.routedDepth = Qmr.depth(toQASM());
+            // With no T or 2q gates there is nothing to map and route, and the external solver
+            // fails on such circuits, so the routed depth is trivially 0.
+            if (tGateCount() == 0 && twoQGateCount() == 0) {
+                this.routedDepth = 0;
+            } else {
+                this.routedDepth = Qmr.depth(toQASM());
+            }
         }
         return this.routedDepth;
     }
