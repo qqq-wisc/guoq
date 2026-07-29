@@ -1,0 +1,19 @@
+# Scoped to chtc/Dockerfile (BuildKit reads <dockerfile>.dockerignore).
+# Build context is the repo root; only the jar sources + runtime assets are
+# needed. Exclude everything else, especially target/ and the circuits/results.
+*
+
+# GUOQ jar sources
+!pom.xml
+!src
+
+# Runtime assets baked into the image
+!rules
+!resynth.py
+!chtc/runner.py
+
+# Re-exclude build artifacts / bulk that may live inside the included dirs
+**/target
+**/.git
+**/__pycache__
+**/*.pyc

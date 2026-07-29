@@ -63,6 +63,55 @@ public class Params {
      */
     public static int FIDELITY_BREAKEVEN = 1;
     /**
+     * path to the routing-solver checkout for the selected QMR_BACKEND: the qmr-compiler-generator
+     * repo for SCIR/SCMR, or the FastLS repo for FASTLS
+     */
+    public static String QMR_DIR = null;
+    /**
+     * which routing solver backend to call. SCIR uses QMR_DIR/target/release/run-scir; SCMR uses
+     * the generated solver QMR_DIR/generated-solvers/scmr. see {@link QmrBackend}
+     */
+    public static QmrBackend QMR_BACKEND = QmrBackend.SCMR;
+    /**
+     * target architecture the ROUTED_DEPTH opt obj routes against, as a layout name auto-sized to
+     * the circuit's qubit count. SCIR: compact, square-sparse, test-compact. SCMR: compact,
+     * square_sparse. ignored by FASTLS, which auto-sizes its architecture with no name to select
+     */
+    public static String QMR_ARCH = null;
+    /**
+     * solve mode for the SCMR backend: onepass, parallel, or joint-optimize-par. onepass and parallel
+     * each emit one solution; joint-optimize-par runs a parallel anytime search and we take its best.
+     * ignored by the SCIR backend
+     */
+    public static String QMR_SCMR_MODE = "joint-optimize-par";
+    /**
+     * optional path to a FastLS config .toml (tunes its simulated-annealing params). null omits -c
+     * and FastLS uses its built-in defaults. only used by the FASTLS backend
+     */
+    public static String QMR_FASTLS_CONFIG = null;
+    /**
+     * number of chunks the routing solver splits the circuit into. chunks are solved in parallel,
+     * so this trades solution quality for latency. 1 is the quality ceiling and is single threaded
+     */
+    public static int QMR_CHUNKS = 1;
+    /**
+     * strategy the routing solver uses to stitch chunk boundaries back together. one of:
+     * reversal, reversal-compressed, maps, sabre
+     */
+    public static String QMR_RECONCILE = "reversal";
+    /**
+     * number of independent routing solves averaged per cost evaluation. the solver is not
+     * deterministic, so this reduces noise at proportional cost in time
+     */
+    public static int QMR_TRIALS = 5;
+    /**
+     * base seed passed to the routing solver's --seed. trial i of a cost evaluation uses
+     * QMR_SEED + i, so a whole evaluation is reproducible from this value. note the solver is only
+     * partially seeded (--seed fixes the initial qubit map, not the internal search), so equal
+     * seeds do not guarantee equal depth
+     */
+    public static int QMR_SEED = 1;
+    /**
      *
      */
     public static Double ERROR_1Q = null;

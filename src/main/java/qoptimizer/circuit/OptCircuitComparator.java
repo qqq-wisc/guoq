@@ -27,6 +27,12 @@ public class OptCircuitComparator implements Comparator<OptCircuit> {
             case TOTAL_IGNORE_RZ: { // total gate count ignoring rz -> create time
                 return compareTotalGateCountIgnoreRz(o1, o2);
             }
+            case ROUTED_DEPTH: { // depth of the routed circuit -> total gate count -> create time
+                return compareRoutedDepth(o1, o2);
+            }
+            case DEPTH_FT: { // blended ft + routed depth -> total gate count -> create time
+                return compareDepthFt(o1, o2);
+            }
             default:
                 throw new RuntimeException("Unsupported optObj: " + this.optObj);
         }
@@ -66,6 +72,24 @@ public class OptCircuitComparator implements Comparator<OptCircuit> {
 
     private int compareTotalGateCountIgnoreRz(OptCircuit o1, OptCircuit o2) {
         return breakTiesCreateTime(o1, o2, o1.getCircuit().totalGateCountIgnoreRz(), o2.getCircuit().totalGateCountIgnoreRz());
+    }
+
+    private int compareRoutedDepth(OptCircuit o1, OptCircuit o2) {
+        return breakTiesTotalGateCount(o1, o2, o1.getCircuit().routedDepth(), o2.getCircuit().routedDepth());
+    }
+
+    // ft cost -> routed depth -> total gate count -> create time. routedDepth() runs the external
+    // solver, so it is only reached on an ft-cost tie.
+    private int compareDepthFt(OptCircuit o1, OptCircuit o2) {
+        int byFt = Integer.compare(o1.getCircuit().ftCost(), o2.getCircuit().ftCost());
+        if (byFt != 0) {
+            return byFt;
+        }
+        int byDepth = Integer.compare(o1.getCircuit().routedDepth(), o2.getCircuit().routedDepth());
+        if (byDepth != 0) {
+            return byDepth;
+        }
+        return breakTiesCreateTime(o1, o2, o1.getCircuit().totalGateCount(), o2.getCircuit().totalGateCount());
     }
 
     private int breakTiesTotalGateCount(OptCircuit o1, OptCircuit o2, int o1Size, int o2Size) {

@@ -6,5 +6,7 @@ public enum OptObj {
     T,
     FT,
     TOTAL_IGNORE_RZ,
-    FIDELITY
+    FIDELITY,
+    ROUTED_DEPTH,
+    DEPTH_FT
 }

@@ -1,0 +1,36 @@
+universe = docker
+# Image has the GUOQ jar, rewrite rules and run-scir prebuilt (built from
+# chtc/Dockerfile). Point this at your pushed tag.
+docker_image = amxu/guoq-scmr:1
+
+# --- which circuit set -------------------------------------------------------
+# Default sweeps circuits_guoq. For the pyzx-preprocessed set, submit with:
+#   condor_submit -a 'circuit_set=circuits_guoq_after_pyzx' -a 'args_file=guoq_after_pyzx.args' guoq.sub
+# circuit_set is a dir under the repo root (one level up from this chtc/ dir).
+# Results land under out_root/, kept separate per set (both sets share circuit
+# file names, so a shared results dir would collide on the submit node).
+circuit_set = circuits_guoq
+args_file   = guoq.args
+out_root    = run_$(circuit_set)
+
+executable = guoq.sh
+arguments  = "$(Program) $(args) --out-root $(out_root) --run_id $(Cluster)-$(ProcId)"
+
+log    = logs/$(circuit_set)-$(Cluster)-$(ProcId).log
+output = logs/$(circuit_set)-$(Cluster)-$(ProcId).out
+error  = logs/$(circuit_set)-$(Cluster)-$(ProcId).err
+
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT_OR_EVICT
+# Only this job's circuit + the runner. jar/rules/run-scir are in the image.
+transfer_input_files  = ../$(circuit_set)/$(Program), runner.py
+# $Fn strips path + .qasm extension: 4_49_16.qasm -> run_<set>/results_4_49_16.
+# The runner gzips the verbosity-10 .out log before we transfer it back.
+transfer_output_files = $(out_root)/results_$Fn(Program)
+
+# Host machine desired min specs (tune to taste).
+request_cpus = 40
+request_memory = 32GB
+request_disk = 10GB
+
+queue Program, args from $(args_file)

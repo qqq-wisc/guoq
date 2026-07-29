@@ -33,6 +33,7 @@ import qoptimizer.circuit.PathSum;
 import qoptimizer.config.GateSet;
 import qoptimizer.config.OptObj;
 import qoptimizer.config.Params;
+import qoptimizer.config.QmrBackend;
 import qoptimizer.config.Resynth;
 import qoptimizer.config.ResynthArgs;
 import qoptimizer.config.SearchStrategy;
@@ -463,6 +464,7 @@ public class Optimizer {
                     replaced.addAll(replaceDag.nodes());
 
                     replace(copy.getDag(), pattern, replaceDag, patternToCirc, patternToCircuitQubit);
+                    copy.invalidateRoutedDepth(); // replace() mutates the graph directly
                     if (applyOnce) {
                         return copy;
                     }
@@ -2123,6 +2125,15 @@ public class Optimizer {
         if (c.cost(optObj) == currentBest.cost(optObj)) {
             if (optObj == OptObj.TWO_Q) {
                 return c.totalGateCount() < currentBest.totalGateCount();
+            } else if (optObj == OptObj.DEPTH_FT) {
+                // equal ft cost: prefer lower routed depth, then fewer total gates
+                if (c.routedDepth() < currentBest.routedDepth()) {
+                    return true;
+                }
+                if (c.routedDepth() == currentBest.routedDepth()) {
+                    return c.totalGateCount() < currentBest.totalGateCount();
+                }
+                return false;
             } else if (optObj == OptObj.T) {
                 if (c.twoQGateCount() < currentBest.twoQGateCount()) {
                     return true;
@@ -2139,6 +2150,11 @@ public class Optimizer {
         log.put("best_circuit_size", String.valueOf(bestCircuit.getCircuit().totalGateCount()));
         log.put("best_size_2q", String.valueOf(bestCircuit.getCircuit().twoQGateCount()));
         log.put("best_size_t", String.valueOf(bestCircuit.getCircuit().tGateCount()));
+        // gated on the objective: each call is a full external routing solve, which is orders of
+        // magnitude more expensive than the gate counts above
+        if (Params.OPTIMIZATION_OBJECTIVE == OptObj.ROUTED_DEPTH || Params.OPTIMIZATION_OBJECTIVE == OptObj.DEPTH_FT) {
+            log.put("best_routed_depth", String.valueOf(bestCircuit.getCircuit().routedDepth()));
+        }
         log.put("time_to_best", String.valueOf(bestCircuit.getTimeToBest()));
         log.put("seconds_elapsed", String.valueOf(secondsElapsed));
     }
@@ -2202,6 +2218,9 @@ public class Optimizer {
         log.put("original_total", String.valueOf(initialCirc.getCircuit().totalGateCount()));
         log.put("original_2q", String.valueOf(initialCirc.getCircuit().twoQGateCount()));
         log.put("original_t", String.valueOf(initialCirc.getCircuit().tGateCount()));
+        if (Params.OPTIMIZATION_OBJECTIVE == OptObj.ROUTED_DEPTH || Params.OPTIMIZATION_OBJECTIVE == OptObj.DEPTH_FT) {
+            log.put("original_routed_depth", String.valueOf(initialCirc.getCircuit().routedDepth()));
+        }
         String json = gson.toJson(log);
         System.out.println(json);
     }
@@ -2324,6 +2343,42 @@ public class Optimizer {
                 .type(OptObj.class)
                 .setDefault(Params.OPTIMIZATION_OBJECTIVE)
                 .help("optimization objective");
+        parser.addArgument("--qmr-dir")
+                .type(String.class)
+                .setDefault(Params.QMR_DIR)
+                .help("path to the QMR mapping-and-routing solver checkout (ROUTED_DEPTH opt obj)");
+        parser.addArgument("--qmr-backend")
+                .type(QmrBackend.class)
+                .setDefault(Params.QMR_BACKEND)
+                .help("routing solver backend: SCIR (run-scir) or SCMR (generated Amaro solver)");
+        parser.addArgument("--qmr-arch")
+                .type(String.class)
+                .setDefault(Params.QMR_ARCH)
+                .help("architecture layout name, auto-sized to the circuit: SCIR compact/square-sparse/test-compact, SCMR compact/square_sparse (ignored by FASTLS)");
+        parser.addArgument("--qmr-scmr-mode")
+                .type(String.class)
+                .setDefault(Params.QMR_SCMR_MODE)
+                .help("solve mode for the SCMR backend: onepass, parallel, or joint-optimize-par");
+        parser.addArgument("--qmr-fastls-config")
+                .type(String.class)
+                .setDefault(Params.QMR_FASTLS_CONFIG)
+                .help("optional path to a FastLS config .toml (FASTLS backend)");
+        parser.addArgument("--qmr-chunks")
+                .type(Integer.class)
+                .setDefault(Params.QMR_CHUNKS)
+                .help("number of chunks the routing solver splits the circuit into (ROUTED_DEPTH opt obj)");
+        parser.addArgument("--qmr-trials")
+                .type(Integer.class)
+                .setDefault(Params.QMR_TRIALS)
+                .help("number of routing solves averaged per cost evaluation (ROUTED_DEPTH opt obj)");
+        parser.addArgument("--qmr-seed")
+                .type(Integer.class)
+                .setDefault(Params.QMR_SEED)
+                .help("base seed for the routing solver; trial i uses seed+i (ROUTED_DEPTH opt obj)");
+        parser.addArgument("--qmr-reconcile")
+                .type(String.class)
+                .setDefault(Params.QMR_RECONCILE)
+                .help("chunk reconciliation strategy: reversal, reversal-compressed, maps, sabre (ROUTED_DEPTH opt obj)");
         parser.addArgument("-resynth", "--resynth-alg")
                 .type(Resynth.class)
                 .setDefault(Params.RESYNTH_ALG)
@@ -2419,6 +2474,15 @@ public class Optimizer {
             Params.FIDELITY_BREAKEVEN = parsed.get("fidelity");
             Params.ERROR_1Q = parsed.getDouble("error_1q");
             Params.ERROR_2Q = parsed.getDouble("error_2q");
+            Params.QMR_DIR = parsed.getString("qmr_dir");
+            Params.QMR_BACKEND = parsed.get("qmr_backend");
+            Params.QMR_ARCH = parsed.getString("qmr_arch");
+            Params.QMR_SCMR_MODE = parsed.getString("qmr_scmr_mode");
+            Params.QMR_FASTLS_CONFIG = parsed.getString("qmr_fastls_config");
+            Params.QMR_CHUNKS = parsed.getInt("qmr_chunks");
+            Params.QMR_RECONCILE = parsed.getString("qmr_reconcile");
+            Params.QMR_TRIALS = parsed.getInt("qmr_trials");
+            Params.QMR_SEED = parsed.getInt("qmr_seed");
             Params.RESYNTH_ALG = parsed.get("resynth_alg");
             Params.RESYNTH_ARGS = parsed.get("resynth_args");
             Params.MAX_RESYNTH_ALLOWED = parsed.get("max_resynth_allowed");
@@ -2451,8 +2515,18 @@ public class Optimizer {
                 }
             }
 
-            if (Params.OPTIMIZATION_OBJECTIVE == OptObj.FT) {
+            if (Params.OPTIMIZATION_OBJECTIVE == OptObj.FT || Params.OPTIMIZATION_OBJECTIVE == OptObj.DEPTH_FT) {
                 Params.FIDELITY_BREAKEVEN = 50;
+            }
+
+            if (Params.OPTIMIZATION_OBJECTIVE == OptObj.ROUTED_DEPTH || Params.OPTIMIZATION_OBJECTIVE == OptObj.DEPTH_FT) {
+                if (Params.QMR_DIR == null) {
+                    throw new RuntimeException("--qmr-dir required for " + Params.OPTIMIZATION_OBJECTIVE + " optimization objective");
+                }
+                // FASTLS auto-sizes its architecture; SCIR/SCMR need one specified
+                if (Params.QMR_BACKEND != QmrBackend.FASTLS && Params.QMR_ARCH == null) {
+                    throw new RuntimeException("--qmr-arch required for the " + Params.QMR_BACKEND + " backend");
+                }
             }
 
             if (Params.OPTIMIZATION_OBJECTIVE == OptObj.FIDELITY && Params.FIDELITY_BREAKEVEN == 1) {

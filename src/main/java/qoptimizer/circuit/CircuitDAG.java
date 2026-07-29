@@ -7,6 +7,7 @@ import lombok.Setter;
 import org.jgrapht.Graphs;
 import org.jgrapht.graph.DirectedMultigraph;
 import org.jgrapht.traverse.TopologicalOrderIterator;
+import qoptimizer.Qmr;
 import qoptimizer.config.OptObj;
 import qoptimizer.config.Params;
 
@@ -35,6 +36,13 @@ public class CircuitDAG {
     private BiMap<String, String> qubitRenameMap; // partition name : original name
     private Map<String, Node> qubitToLeaf;
     private LinkedList<Node> gatesToAddStack;
+    /**
+     * memoized result of {@link #routedDepth()}. null when not yet computed or invalidated by a
+     * mutation. the external routing solver is nondeterministic, so this is not merely a speedup:
+     * without it a single circuit yields a different depth on every evaluation, which makes the
+     * priority queue comparator inconsistent and lets the search accept strictly worse circuits.
+     */
+    private Integer routedDepth;
 
     public CircuitDAG() {
         this.dag = new DirectedMultigraph<>(Edge.class);
@@ -50,6 +58,9 @@ public class CircuitDAG {
         this.qasmHeader = circuit.getQasmHeader();
         this.qubits = new HashSet<>(circuit.getQubits());
         this.qubitRenameMap = HashBiMap.create(circuit.getQubitRenameMap());
+        // deliberately not inheriting circuit.routedDepth: copies are made in order to be mutated
+        // in place through getDag(), which cannot invalidate the memo
+        this.routedDepth = null;
     }
 
     public String toQASM() {
@@ -180,6 +191,7 @@ public class CircuitDAG {
         if (gatesToAddStack.contains(gate)) {
             return;
         }
+        this.routedDepth = null;
         for (int i = 0; i < gate.getQubits().size(); i++) {
             String qubit = gate.getQubits().get(i);
             if (!qubits.contains(qubit)) {
@@ -197,6 +209,7 @@ public class CircuitDAG {
     }
 
     public void addGate(Node gate) {
+        this.routedDepth = null;
         for (String qubit : gate.getQubits()) {
             qubits.add(qubit);
         }
@@ -205,6 +218,7 @@ public class CircuitDAG {
     }
 
     public void addAllPartition() {
+        this.routedDepth = null;
         for (Node gate : gatesToAddStack) {
             dag.addVertex(gate);
             addEdges(gate);
@@ -264,6 +278,34 @@ public class CircuitDAG {
         return size;
     }
 
+    /**
+     * Weight of T gates vs. 2q gates, matching the FT objective. Factored out so the FT and DEPTH_FT
+     * objectives share one definition. Relies on Params.FIDELITY_BREAKEVEN being set to 50 for both.
+     */
+    public int ftCost() {
+        return Params.FIDELITY_BREAKEVEN * tGateCount() + twoQGateCount();
+    }
+
+    /**
+     * Discards the memoized routed depth. Must be called after mutating the graph directly through
+     * {@link #getDag()}, which bypasses this class's own invalidation.
+     */
+    public void invalidateRoutedDepth() {
+        this.routedDepth = null;
+    }
+
+    /**
+     * Depth of this circuit after mapping and routing onto the target architecture, as reported by
+     * the external QMR solver. Each call performs a full solve, so this is orders of magnitude more
+     * expensive than the purely structural metrics above; the result is memoized.
+     */
+    public int routedDepth() {
+        if (this.routedDepth == null) {
+            this.routedDepth = Qmr.depth(toQASM());
+        }
+        return this.routedDepth;
+    }
+
     public int cost(OptObj optObj) {
         switch (optObj) {
             case TOTAL: {
@@ -282,7 +324,17 @@ public class CircuitDAG {
                 return fidelity();
             }
             case FT: {
-                return Params.FIDELITY_BREAKEVEN * tGateCount() + twoQGateCount();
+                return ftCost();
+            }
+            case ROUTED_DEPTH: {
+                return routedDepth();
+            }
+            case DEPTH_FT: {
+                // lexicographic: ft cost is the scalar objective (a crisp, noise-free signal, so the
+                // search reduces T and 2q gates exactly like FT). routed depth breaks ties among
+                // equal-ft-cost circuits in the comparator and bestSol, where its noise can only pick
+                // between equally-good gate counts, never block a gate reduction
+                return ftCost();
             }
             default:
                 throw new RuntimeException("Unsupported optObj: " + optObj);
