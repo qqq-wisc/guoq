@@ -1,0 +1,129 @@
+# Built-in gate sets.
+#
+# In the reference implementation this information lived in three places that had to be
+# kept in sync by hand: the `GateSet` Java enum, the `Params.GATE_SET_RULES_MAP` and
+# `Params.GATE_SET_RESYNTH_MAP` static maps, and a switch statement at the bottom of
+# `Synthesizer.main`. Adding a gate set meant editing all four and recompiling. Here it is
+# data, and `--gate-sets <file>` can add more without a rebuild.
+
+[[gateset]]
+name = "nam"
+aliases = ["NAM"]
+description = "Nam et al.: h, rz, x, cx"
+gates = ["h", "rz", "x", "cx"]
+resynth_target = "nam"
+default_rules = "rules_q3_s6_nam.txt"
+# Generated, not vendored from the reference: `queso -g nam -q 3 -s 3 --symbolic` from
+# this repo's own synthesizer, which is not gated by the reference's gate restriction and
+# so can put `cx` and `h` inside a symbolic hole. It reproduces all 127 valid rules the
+# reference's file has (see docs/PORTING-NOTES.md) and adds thousands it cannot express,
+# so this is a strict improvement, not a swap of one corpus for a different one. The
+# same holds for every gate set below except ibmo and ion.
+default_symb_rules = "generated/rules_q3_s3_nam_symb.txt"
+synth_angles = ["theta1", "theta2", "theta1+theta2"]
+
+[[gateset]]
+name = "ibmn"
+aliases = ["IBMN", "ibmnew", "ibm-eagle"]
+description = "IBM Eagle: rz, sx, x, cx"
+gates = ["rz", "sx", "x", "cx"]
+resynth_target = "ibm_new"
+default_rules = "rules_q3_s6_ibmnew.txt"
+# Generated; see the note on nam above. Also a strict superset by coverage (115 of 115
+# valid vendored rules reproduced).
+default_symb_rules = "generated/rules_q3_s3_ibmnew_symb.txt"
+synth_angles = ["theta1", "theta2", "theta1+theta2"]
+
+[[gateset]]
+name = "ibmo"
+aliases = ["IBMO", "ibm", "ibmq20"]
+description = "IBM Q20: u1, u2, u3, cx"
+gates = ["u1", "u2", "u3", "cx"]
+resynth_target = "none"
+default_rules = "rules_q3_s4_ibm.txt"
+# Left on the vendored corpus deliberately, not merely un-updated: `u3`'s three
+# independent angles give it ~125 combinations per boundary position, and this crate's
+# symbolic-half generator -- which needs the actual halves, not just one canonical
+# representative per behavior, see docs/PORTING-NOTES.md -- keeps every one of them as a
+# candidate rather than collapsing near-duplicates. That ran into double-digit gigabytes
+# of RAM and was killed before finishing rather than risk the host. Generating a usable
+# corpus for this gate set needs a smaller angle basis or a smaller half size, not
+# attempted here.
+default_symb_rules = "rules_q3_s3_ibm_symb.txt"
+synth_angles = [
+    "theta1",
+    "theta2",
+    "theta3",
+    "theta1+theta2",
+    "theta1+theta2+theta3",
+]
+# The reference's `containsAngle` pruning: each basis expression is single-use per
+# circuit for the u gates. This is what makes enumerating this set tractable — its
+# absence is why this port initially could not generate ibmo rules at any size.
+single_use_angles = ["u1", "u2", "u3"]
+
+[[gateset]]
+name = "ion"
+aliases = ["ION", "iontrap"]
+description = "Trapped ion: rx, ry, rz, rxx"
+gates = ["rx", "ry", "rz", "rxx"]
+resynth_target = "ion"
+default_rules = "rules_q3_s3_ion.txt"
+# Left on the vendored corpus: `queso -g ion --symbolic` at these parameters runs to
+# completion (unlike ibmo above) but its six-value two-qubit angle basis makes for 892,752
+# symbolic rules (~480MB), too large to vendor or to validate for coverage/quality here.
+# Left as a documented "generation works, adoption did not happen" case rather than a
+# silent gap.
+default_symb_rules = "rules_q3_s3_ion_symb.txt"
+synth_angles = [
+    "theta1",
+    "theta2",
+    "theta1+theta2",
+    "4*pi-theta1",
+    "pi",
+    "pi/2",
+]
+# The reference prunes rxx (and ms) applications whose angle already appears in the
+# circuit, the same `containsAngle` rule as ibmo's u gates; matched here so the
+# enumeration space is the reference's.
+single_use_angles = ["rxx", "ms"]
+
+[[gateset]]
+name = "cliffordt"
+aliases = ["CLIFFORDT", "clifford+t"]
+description = "Clifford + T: h, x, s, sdg, t, tdg, cx"
+gates = ["h", "x", "s", "sdg", "t", "tdg", "cx"]
+resynth_target = "none"
+default_rules = "rules_q3_s6_cliffordt.txt"
+# Generated; see the note on nam above. All 368 shipped rules reproduced. Nearly half of
+# them are identities only up to a global phase (`tdg . P = i * (t . P . s)` for the
+# bit-flip permutation), which the synthesizer's exact-phase pair discovery used to miss
+# entirely -- coverage sat at 46% until discovery went phase-invariant like every
+# consumer of a rule already was. See docs/PORTING-NOTES.md.
+default_symb_rules = "generated/rules_q3_s3_cliffordt_symb.txt"
+synth_angles = []
+
+[[gateset]]
+name = "rigetti"
+aliases = ["RIGETTI"]
+description = "Rigetti: rx at fixed angles, rz, cz"
+gates = ["rx", "rz", "cz"]
+resynth_target = ""
+default_rules = "rules_q3_s5_rigetti.txt"
+# Generated; see the note on nam above. All 382 shipped rules reproduced. The apparent
+# 81% coverage this sat at was a spelling artifact -- the printer folded the fixed `rx`
+# angles to decimals, so every `rx`-carrying rule looked textually novel -- plus the
+# same phase-blind pair discovery that capped cliffordt. See docs/PORTING-NOTES.md.
+default_symb_rules = "generated/rules_q3_s3_rigetti_symb.txt"
+synth_angles = ["theta1", "theta2", "theta1+theta2", "4*pi-theta1"]
+# Rigetti's rx is only available at three fixed angles, so rule synthesis enumerates
+# those rather than the symbolic angle basis.
+[[gateset.fixed_params]]
+gate = "rx"
+params = ["pi/2"]
+[[gateset.fixed_params]]
+gate = "rx"
+params = ["3*pi/2"]
+[[gateset.fixed_params]]
+gate = "rx"
+params = ["pi"]

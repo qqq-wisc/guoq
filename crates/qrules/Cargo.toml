@@ -1,0 +1,25 @@
+[package]
+name = "qrules"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rewrite-rule representation, matching, and application for quantum circuits."
+
+[dependencies]
+qcircuit.workspace = true
+qsemantics.workspace = true
+num-complex.workspace = true
+ndarray.workspace = true
+rustc-hash.workspace = true
+rayon.workspace = true
+thiserror.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+qsemantics.workspace = true
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

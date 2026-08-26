@@ -1,0 +1,24 @@
+[package]
+name = "qsynth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "QUESO: synthesizing rewrite rules by enumerating and classifying small circuits."
+
+[dependencies]
+qcircuit.workspace = true
+qsemantics.workspace = true
+qrules.workspace = true
+anyhow.workspace = true
+ndarray.workspace = true
+num-rational.workspace = true
+num-bigint.workspace = true
+num-traits.workspace = true
+num-complex.workspace = true
+rustc-hash.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

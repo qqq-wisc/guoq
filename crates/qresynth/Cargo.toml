@@ -1,0 +1,27 @@
+[package]
+name = "qresynth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Resynthesis backends for GUOQ, and the partitioning that feeds them."
+
+[dependencies]
+qcircuit.workspace = true
+qsemantics.workspace = true
+anyhow.workspace = true
+ndarray.workspace = true
+num-complex.workspace = true
+rand.workspace = true
+rustc-hash.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+rand_chacha.workspace = true
+
+[lints]
+workspace = true

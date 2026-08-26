@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: Format, lint, and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The equivalence tests in crates/guoq-cli/tests/qcec.rs check optimizer output
+      # with MQT QCEC, an external checker that shares none of this codebase's
+      # assumptions. They are deliberately not optional: without qcec they fail rather
+      # than skip, because a silently skipped equivalence check reads as a pass.
+      - name: Install QCEC
+        run: pip install mqt.qcec
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+  corpus:
+    name: Full corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # The real-backend end-to-end tests in crates/guoq-cli/tests/resynth_budget.rs
+      # skip quietly when a backend is missing, so installing both here is what makes
+      # them actually run in CI.
+      - name: Install QCEC and BQSKit
+        run: pip install mqt.qcec bqskit
+
+      - name: Cache Synthetiq
+        id: synthetiq-cache
+        uses: actions/cache@v4
+        with:
+          path: lib/synthetiq/bin
+          key: synthetiq-${{ runner.os }}-v1
+
+      - name: Build Synthetiq
+        if: steps.synthetiq-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git clone --depth=1 https://github.com/eth-sri/synthetiq.git /tmp/synthetiq-src
+          # Portable flags instead of the makefile's -march=native: the binary is cached
+          # across runners whose CPUs differ.
+          make -C /tmp/synthetiq-src all -j"$(nproc)" \
+            CPPFLAGS="-I include/eigen-3.3.9/ -MMD -MP -O2 -ffast-math -DEIGEN_NO_DEBUG -funroll-loops"
+          mkdir -p lib/synthetiq/bin
+          cp /tmp/synthetiq-src/bin/main lib/synthetiq/bin/main
+
+      # Synthetiq resolves its gate definitions relative to its working directory, which
+      # the backend derives from the binary path; the data directory has to sit next to
+      # the cached binary either way.
+      - name: Fetch Synthetiq data
+        run: |
+          set -euo pipefail
+          if [ ! -d lib/synthetiq/data ]; then
+            git clone --depth=1 https://github.com/eth-sri/synthetiq.git /tmp/synthetiq-data
+            mkdir -p lib/synthetiq
+            cp -r /tmp/synthetiq-data/data lib/synthetiq/data
+          fi
+
+      # The corpus suites check every one of the 177,380 shipped rewrite rules, sweep
+      # real rules across real circuits, and drive the real resynthesis backends end to
+      # end. They are `#[ignore]`d by default because they are slow in a debug build; in
+      # release they take a couple of minutes.
+      - name: Corpus and sweeps
+        run: cargo test --workspace --release -- --include-ignored
+
+  smoke:
+    name: End-to-end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Optimize a benchmark
+        run: |
+          set -euo pipefail
+          ./target/release/guoq -g NAM -opt TOTAL -resynth NONE \
+            --seed 1 --max-iters 200 --verify-final \
+            -out /tmp/out benchmarks/nam_rz/tof_3.qasm
+          test -s /tmp/out/optimized__tof_3.qasm
+
+      - name: Synthesize a rule set and use it
+        run: |
+          set -euo pipefail
+          ./target/release/queso -g nam -q 3 -s 3 -o /tmp/synth.txt -v
+          : > /tmp/synth_symb.txt
+          ./target/release/guoq -g NAM -opt TOTAL -resynth NONE \
+            --seed 1 --max-iters 200 --verify-final \
+            -r /tmp/synth.txt -sr /tmp/synth_symb.txt \
+            -out /tmp/out2 benchmarks/nam_rz/tof_3.qasm
+          test -s /tmp/out2/optimized__tof_3.qasm
+
+      - name: Inspect a shipped rule file
+        run: ./target/release/queso inspect rules/rules_q3_s3_nam_symb.txt

@@ -1,0 +1,38 @@
+[package]
+name = "guoq-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Command-line interface for the GUOQ quantum-circuit optimizer."
+
+[lib]
+name = "guoq_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "guoq"
+path = "src/bin/guoq.rs"
+
+[[bin]]
+name = "queso"
+path = "src/bin/queso.rs"
+
+[dependencies]
+qcircuit.workspace = true
+qsemantics.workspace = true
+qrules.workspace = true
+qopt.workspace = true
+rayon.workspace = true
+qresynth.workspace = true
+qsynth.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
