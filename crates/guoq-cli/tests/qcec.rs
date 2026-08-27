@@ -125,7 +125,7 @@ fn wide_circuit(path: &Path) {
     for i in 0..1200u64 {
         let a = (next() % 16) as usize;
         if i % 5 == 0 {
-            let b = ((a + 1 + (next() % 15) as usize) % 16).max(0);
+            let b = (a + 1 + (next() % 15) as usize) % 16;
             src.push_str(&format!("cx q[{a}], q[{b}];\n"));
         } else if i % 7 == 0 {
             // An adjacent self-inverse pair, so reduction has guaranteed prey.
