@@ -1,0 +1,33 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "guoq"
+version = "0.1.0"
+description = "GUOQ quantum-circuit optimizer and QUESO rule synthesizer: native binaries plus a small Python shim to locate them"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["quantum", "compiler", "circuit-optimization", "superoptimization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+
+[project.urls]
+Repository = "https://github.com/qqq-wisc/guoq"
+
+# Binary distribution in the style of ruff: the `guoq` and `queso` binaries are
+# installed as console scripts, and the pure-Python `guoq` package in python/ exists
+# to locate them (and the BQSKit worker script) from other Python code such as wisq.
+[tool.maturin]
+bindings = "bin"
+manifest-path = "crates/guoq-cli/Cargo.toml"
+module-name = "guoq"
+python-source = "python"
+strip = true
