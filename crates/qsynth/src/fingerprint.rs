@@ -360,7 +360,7 @@ mod tests {
             by_fp.entry(fp(c, 2, 13)).or_default().push(c);
         }
         // The only expected collision is cz == h(1) cx h(1), which is not in the list.
-        for (_, group) in by_fp.iter() {
+        for group in by_fp.values() {
             assert_eq!(
                 group.len(),
                 1,

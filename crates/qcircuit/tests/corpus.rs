@@ -164,6 +164,7 @@ fn rule_files() -> Vec<PathBuf> {
 /// benchmark circuits do. Milestone 3 extends this to check that the two sides are
 /// actually equivalent unitaries.
 #[test]
+#[ignore = "sweeps the full rule corpus (177,380 rules); run in release"]
 fn every_rule_side_parses() {
     let mut rules = 0usize;
     let mut sides = 0usize;

@@ -29,6 +29,13 @@ cargo test --workspace           # test suite
 pip install maturin && maturin build --release   # the wheel
 ```
 
+## Benchmarks
+
+`benchmarks/` vendors a curated subset (229 circuits, ~1.4 MB) spanning every supported
+gate set; the corpus tests sweep it. The full upstream set (~409 MB) is not vendored —
+fetch it into `benchmarks-full/` with `./scripts/fetch-benchmarks.sh` when running
+differential evaluations.
+
 ## Running
 
 ```bash

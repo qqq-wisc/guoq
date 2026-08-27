@@ -173,15 +173,14 @@ fn seeded_match<R: Rng + ?Sized>(
     // Copy the bucket only to shuffle it: a deterministic scan iterates the index's own
     // slice, which matters because this runs once per applied site — an exhaustive pass
     // over a large circuit calls it thousands of times against a bucket of thousands.
-    let borrowed: &[NodeIndex];
     let mut shuffled: Vec<NodeIndex>;
-    if opts.shuffle {
+    let borrowed: &[NodeIndex] = if opts.shuffle {
         shuffled = ctx.seed_candidates(pattern).to_vec();
         shuffled.shuffle(rng);
-        borrowed = &shuffled;
+        &shuffled
     } else {
-        borrowed = ctx.seed_candidates(pattern);
-    }
+        ctx.seed_candidates(pattern)
+    };
     // A failed attempt costs nothing: no gate is marked consumed until a match is
     // accepted.
     //
